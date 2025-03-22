@@ -1,3 +1,4 @@
+
 import os
 import time
 import json
@@ -8,6 +9,7 @@ from telegram.ext import (
     CommandHandler, MessageHandler, filters
 )
 from openai import OpenAI
+
 
 # ========== .ENV ==========
 load_dotenv()
@@ -104,16 +106,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Статистика
     user_stats[uid] = user_stats.get(uid, 0) + 1
 
-    # GPT
+    # GPT: модель залежно від користувача
+    model_name = "gpt-4o" if uid == admin_id else "gpt-3.5-turbo"
+
     try:
         completion = client.chat.completions.create(
-            model="gpt-4o",
+            model=model_name,
             messages=[
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": update.message.text}
             ]
         )
         reply = completion.choices[0].message.content
+
+        if uid != admin_id:
+            reply += "\n\n⚠️ Це відповідь від GPT-3.5. Для доступу до GPT-4 — зверніться до автора."
+
         keyboard = [["Жарт", "Філософ", "Поясни простіше"]]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
         await update.message.reply_text(reply, reply_markup=reply_markup)
@@ -134,7 +142,7 @@ if __name__ == "__main__":
         app.add_handler(CommandHandler("stats", stats_command))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-        print("Bot pratsiuie...")
+        print("Bot pratsiuie... (gpt-4 for admin, gpt-3.5 for public)")
         app.run_polling()
     except Exception as e:
         log(f"LAUNCH ERROR: {e}")
