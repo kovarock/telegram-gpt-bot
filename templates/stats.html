@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>📊 Аналітика Telegram-бота</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #f9f9f9; }
+    h1 { color: #333; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; background: white; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #eee; }
+    canvas { max-width: 100%; margin-top: 40px; }
+  </style>
+</head>
+<body>
+  <h1>📊 Аналітика Telegram-бота</h1>
+
+  <h2>👤 Топ користувачі</h2>
+  <table>
+    <tr><th>ID</th><th>Ім'я</th><th>Повідомлень</th></tr>
+    {% for uid, name, count in user_stats %}
+      <tr><td>{{ uid }}</td><td>{{ name }}</td><td>{{ count }}</td></tr>
+    {% endfor %}
+  </table>
+
+  <h2>📅 Активність по днях</h2>
+  <canvas id="dailyChart"></canvas>
+
+  <script>
+    const ctx = document.getElementById('dailyChart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: {{ dates | tojson }},
+        datasets: [{
+          label: 'Кількість повідомлень',
+          data: {{ counts | tojson }},
+          fill: true,
+          borderColor: 'blue',
+          tension: 0.3,
+          backgroundColor: 'rgba(0, 0, 255, 0.1)'
+        }]
+      },
+      options: {
+        scales: {
+          y: { beginAtZero: true }
+        }
+      }
+    });
+  </script>
+</body>
+</html>

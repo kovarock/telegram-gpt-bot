@@ -2,6 +2,8 @@
 import os
 import time
 import json
+import sqlite3
+from datetime import datetime
 from dotenv import load_dotenv
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
@@ -9,7 +11,6 @@ from telegram.ext import (
     CommandHandler, MessageHandler, filters
 )
 from openai import OpenAI
-
 
 # ========== .ENV ==========
 load_dotenv()
@@ -24,6 +25,7 @@ user_data = {}
 admin_id = 898106096
 user_stats = {}
 LOG_FILE = "logs.txt"
+DB_FILE = "analytics.db"
 
 # ========== ДОПОМІЖНІ ==========
 def log(text):
@@ -38,6 +40,23 @@ def get_mode_prompt(mode):
         "філософ": "Ти глибокий мислитель, який дає мудрі і розгорнуті відповіді.",
         "простий": "Ти пояснюєш складні речі дуже просто, як для 10-річної дитини."
     }.get(mode, "Ти корисний асистент, що відповідає українською.")
+
+def save_to_db(user_id, name, message):
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute('''CREATE TABLE IF NOT EXISTS messages (
+            user_id INTEGER,
+            name TEXT,
+            message TEXT,
+            timestamp TEXT
+        )''')
+        cursor.execute("INSERT INTO messages VALUES (?, ?, ?, ?)",
+                       (user_id, name, message, datetime.now().isoformat()))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        log(f"DB ERROR: {e}")
 
 # ========== КОМАНДИ ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -72,8 +91,9 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ========== ПОВІДОМЛЕННЯ ==========
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    message = update.message.text.strip().lower()
-
+    name = update.effective_user.first_name
+    message = update.message.text.strip()
+    
     # Антиспам: 3 сек між повідомленнями
     now = time.time()
     last = context.user_data.get("last_msg", 0)
@@ -83,21 +103,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["last_msg"] = now
 
     # Обробка вибору кнопками
-    if message in ["жарт", "жартівник"]:
+    lower = message.lower()
+    if lower in ["жарт", "жартівник"]:
         user_data[uid] = {"mode": "жартівник"}
         await update.message.reply_text("Режим: Жартівник 🤪")
         return
-    elif message in ["філософ"]:
+    elif lower in ["філософ"]:
         user_data[uid] = {"mode": "філософ"}
         await update.message.reply_text("Режим: Філософ 🤔")
         return
-    elif message in ["поясни простіше", "простий"]:
+    elif lower in ["поясни простіше", "простий"]:
         user_data[uid] = {"mode": "простий"}
         await update.message.reply_text("Режим: Простий 👶")
         return
 
-    # Логування
-    log(f"[{uid}] {update.effective_user.first_name}: {message}")
+    # Логування та збереження в базу
+    log(f"[{uid}] {name}: {message}")
+    save_to_db(uid, name, message)
 
     # Визначення режиму
     mode = user_data.get(uid, {}).get("mode", "звичайний")
@@ -114,7 +136,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             model=model_name,
             messages=[
                 {"role": "system", "content": prompt},
-                {"role": "user", "content": update.message.text}
+                {"role": "user", "content": message}
             ]
         )
         reply = completion.choices[0].message.content
