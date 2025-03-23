@@ -26,6 +26,7 @@ user_stats = {}
 LOG_FILE = "logs.txt"
 DB_FILE = "analytics.db"
 MONO_DONATE_LINK = "https://send.monobank.ua/jar/5TCxdr4z1P"
+VIP_FILE = "vip_users.json"
 
 # ========== ДОПОМІЖНІ ==========
 def log(text):
@@ -58,6 +59,15 @@ def save_to_db(user_id, name, message):
     except Exception as e:
         log(f"DB ERROR: {e}")
 
+def load_vips():
+    if not os.path.exists(VIP_FILE): return []
+    with open(VIP_FILE, "r") as f:
+        return json.load(f)
+
+def save_vips(vips):
+    with open(VIP_FILE, "w") as f:
+        json.dump(vips, f)
+
 # ========== КОМАНДИ ==========
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [["Жарт", "Філософ", "Поясни простіше"]]
@@ -68,7 +78,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("/mode — змінити режим\n/reset — скинути режим\n/stats — статистика\n/admin — тільки для власника\n/donate — підтримати бота\n/premium — доступ до GPT-4")
+    await update.message.reply_text("/mode — змінити режим\n/reset — скинути режим\n/stats — статистика\n/donate — підтримати бота\n/premium — доступ до GPT-4\n/addvip <id> — додати VIP\n/removevip <id> — видалити VIP\n/viplist — список VIP")
 
 async def mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Оберіть режим: жартівник / філософ / простий")
@@ -89,14 +99,9 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"Користувачів: {count}\nВсього запитів: {total}")
 
 async def donate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("Підтримати в Monobank ❤️", url=MONO_DONATE_LINK)]
-    ]
+    keyboard = [[InlineKeyboardButton("Підтримати в Monobank ❤️", url=MONO_DONATE_LINK)]]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        "💛 Хочеш підтримати розвиток бота? Буду дуже вдячний за донат!",
-        reply_markup=reply_markup
-    )
+    await update.message.reply_text("💛 Хочеш підтримати розвиток бота? Буду дуже вдячний за донат!", reply_markup=reply_markup)
 
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -106,18 +111,50 @@ async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        "💎 Хочеш доступ до GPT-4? Підтримай проєкт і напиши автору!",
-        reply_markup=reply_markup
-    )
+    await update.message.reply_text("💎 Хочеш доступ до GPT-4? Підтримай проєкт і напиши автору!", reply_markup=reply_markup)
+
+async def addvip(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != admin_id:
+        return
+    try:
+        uid = int(context.args[0])
+        vips = load_vips()
+        if uid not in vips:
+            vips.append(uid)
+            save_vips(vips)
+            await update.message.reply_text(f"✅ Користувача {uid} додано до VIP")
+        else:
+            await update.message.reply_text(f"⚠️ Користувач {uid} вже є у VIP")
+    except:
+        await update.message.reply_text("Використання: /addvip <user_id>")
+
+async def removevip(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != admin_id:
+        return
+    try:
+        uid = int(context.args[0])
+        vips = load_vips()
+        if uid in vips:
+            vips.remove(uid)
+            save_vips(vips)
+            await update.message.reply_text(f"❌ Користувача {uid} видалено з VIP")
+        else:
+            await update.message.reply_text(f"Користувача {uid} немає у VIP")
+    except:
+        await update.message.reply_text("Використання: /removevip <user_id>")
+
+async def viplist(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != admin_id:
+        return
+    vips = load_vips()
+    await update.message.reply_text("VIP користувачі:\n" + "\n".join(map(str, vips)))
 
 # ========== ПОВІДОМЛЕННЯ ==========
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     name = update.effective_user.first_name
     message = update.message.text.strip()
-    
-    # Антиспам: 3 сек між повідомленнями
+
     now = time.time()
     last = context.user_data.get("last_msg", 0)
     if now - last < 3:
@@ -125,7 +162,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     context.user_data["last_msg"] = now
 
-    # Обробка вибору кнопками
     lower = message.lower()
     if lower in ["жарт", "жартівник"]:
         user_data[uid] = {"mode": "жартівник"}
@@ -140,19 +176,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Режим: Простий 👶")
         return
 
-    # Логування та збереження в базу
     log(f"[{uid}] {name}: {message}")
     save_to_db(uid, name, message)
 
-    # Визначення режиму
     mode = user_data.get(uid, {}).get("mode", "звичайний")
     prompt = get_mode_prompt(mode)
 
-    # Статистика
     user_stats[uid] = user_stats.get(uid, 0) + 1
 
-    # GPT: модель залежно від користувача
-    model_name = "gpt-4o" if uid == admin_id else "gpt-3.5-turbo"
+    vips = load_vips()
+    model_name = "gpt-4o" if uid in vips or uid == admin_id else "gpt-3.5-turbo"
 
     try:
         completion = client.chat.completions.create(
@@ -164,8 +197,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         reply = completion.choices[0].message.content
 
-        if uid != admin_id:
-            reply += "\n\n⚠️ Це відповідь від GPT-3.5. Для доступу до GPT-4 — напиши /premium"
+        if uid not in vips and uid != admin_id:
+            reply += "\n\n⚠️ Це відповідь від GPT-3.5. Для GPT-4 напиши /premium"
 
         keyboard = [["Жарт", "Філософ", "Поясни простіше"]]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -187,9 +220,12 @@ if __name__ == "__main__":
         app.add_handler(CommandHandler("stats", stats_command))
         app.add_handler(CommandHandler("donate", donate_command))
         app.add_handler(CommandHandler("premium", premium_command))
+        app.add_handler(CommandHandler("addvip", addvip))
+        app.add_handler(CommandHandler("removevip", removevip))
+        app.add_handler(CommandHandler("viplist", viplist))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-        print("Bot pratsiuie... (gpt-4 for admin, gpt-3.5 for public)")
+        print("Bot pratsiuie... (GPT-4 для VIP, GPT-3.5 для інших)")
         app.run_polling()
     except Exception as e:
         log(f"LAUNCH ERROR: {e}")
