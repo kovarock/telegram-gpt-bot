@@ -150,6 +150,7 @@ async def viplist(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("VIP користувачі:\n" + "\n".join(map(str, vips)))
 
 async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("✅ /limits була викликана")
     uid = update.effective_user.id
     today = datetime.now().date().isoformat()
     conn = sqlite3.connect(DB_FILE)
