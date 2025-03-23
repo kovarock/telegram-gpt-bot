@@ -186,6 +186,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     vips = load_vips()
     model_name = "gpt-4o" if uid in vips or uid == admin_id else "gpt-3.5-turbo"
+    # Обмеження запитів
+    today = datetime.now().date().isoformat()
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT COUNT(*) FROM messages
+        WHERE user_id = ? AND DATE(timestamp) = ?
+    """, (uid, today))
+    count_today = cursor.fetchone()[0]
+    conn.close()
+
+    if uid not in vips and uid != admin_id and count_today >= 10:
+        await update.message.reply_text("⚠️ Ви досягли ліміту 10 запитів на день. Напишіть /premium, щоб отримати більше.")
+        return
 
     try:
         completion = client.chat.completions.create(
