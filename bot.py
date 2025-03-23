@@ -151,20 +151,36 @@ async def viplist(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print("✅ /limits була викликана")
+
     uid = update.effective_user.id
     today = datetime.now().date().isoformat()
+
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
+
+    # Створюємо таблицю, якщо ще не існує
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            user_id INTEGER,
+            name TEXT,
+            message TEXT,
+            timestamp TEXT
+        )
+    """)
+
+    # Рахуємо кількість повідомлень за сьогодні
     cursor.execute("""
         SELECT COUNT(*) FROM messages
         WHERE user_id = ? AND DATE(timestamp) = ?
     """, (uid, today))
     count_today = cursor.fetchone()[0]
+
     conn.close()
 
     vips = load_vips()
     limit = "∞ (VIP)" if uid in vips or uid == admin_id else f"{count_today}/10"
     await update.message.reply_text(f"📊 Запитів сьогодні: {limit}")
+
 
 
 async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
