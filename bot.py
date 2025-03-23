@@ -1,11 +1,10 @@
-
 import os
 import time
 import json
 import sqlite3
 from datetime import datetime
 from dotenv import load_dotenv
-from telegram import Update, ReplyKeyboardMarkup
+from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     ApplicationBuilder, ContextTypes,
     CommandHandler, MessageHandler, filters
@@ -26,6 +25,7 @@ admin_id = 898106096
 user_stats = {}
 LOG_FILE = "logs.txt"
 DB_FILE = "analytics.db"
+MONO_DONATE_LINK = "https://send.monobank.ua/jar/5TCxdr4z1P"
 
 # ========== ДОПОМІЖНІ ==========
 def log(text):
@@ -68,7 +68,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("/mode — змінити режим\n/reset — скинути режим\n/stats — статистика\n/admin — тільки для власника")
+    await update.message.reply_text("/mode — змінити режим\n/reset — скинути режим\n/stats — статистика\n/admin — тільки для власника\n/donate — підтримати бота\n/premium — доступ до GPT-4")
 
 async def mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Оберіть режим: жартівник / філософ / простий")
@@ -87,6 +87,29 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     count = len(user_stats)
     total = sum(user_stats.values())
     await update.message.reply_text(f"Користувачів: {count}\nВсього запитів: {total}")
+
+async def donate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("Підтримати в Monobank ❤️", url=MONO_DONATE_LINK)]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(
+        "💛 Хочеш підтримати розвиток бота? Буду дуже вдячний за донат!",
+        reply_markup=reply_markup
+    )
+
+async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [
+            InlineKeyboardButton("💰 Підтримати в Monobank", url=MONO_DONATE_LINK),
+            InlineKeyboardButton("📩 Написати автору", url="https://t.me/kovarock")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(
+        "💎 Хочеш доступ до GPT-4? Підтримай проєкт і напиши автору!",
+        reply_markup=reply_markup
+    )
 
 # ========== ПОВІДОМЛЕННЯ ==========
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -142,7 +165,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply = completion.choices[0].message.content
 
         if uid != admin_id:
-            reply += "\n\n⚠️ Це відповідь від GPT-3.5. Для доступу до GPT-4 — зверніться до автора."
+            reply += "\n\n⚠️ Це відповідь від GPT-3.5. Для доступу до GPT-4 — напиши /premium"
 
         keyboard = [["Жарт", "Філософ", "Поясни простіше"]]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -162,6 +185,8 @@ if __name__ == "__main__":
         app.add_handler(CommandHandler("reset", reset_command))
         app.add_handler(CommandHandler("admin", admin_command))
         app.add_handler(CommandHandler("stats", stats_command))
+        app.add_handler(CommandHandler("donate", donate_command))
+        app.add_handler(CommandHandler("premium", premium_command))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
         print("Bot pratsiuie... (gpt-4 for admin, gpt-3.5 for public)")
