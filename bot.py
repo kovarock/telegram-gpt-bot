@@ -111,7 +111,7 @@ async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("💎 Хочеш доступ до GPT-4? Підтримай проєкт і напиши автору!", reply_markup=reply_markup)
+    await update.message.reply_text("💎 Хочеш доступ до GPT-4? Підтримай проєкт(50 грн/тиж) і напиши автору!", reply_markup=reply_markup)
 
 async def addvip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != admin_id:
@@ -148,6 +148,49 @@ async def viplist(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     vips = load_vips()
     await update.message.reply_text("VIP користувачі:\n" + "\n".join(map(str, vips)))
+
+async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    today = datetime.now().date().isoformat()
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT COUNT(*) FROM messages
+        WHERE user_id = ? AND DATE(timestamp) = ?
+    """, (uid, today))
+    count_today = cursor.fetchone()[0]
+    conn.close()
+
+    vips = load_vips()
+    limit = "∞ (VIP)" if uid in vips or uid == admin_id else f"{count_today}/10"
+    await update.message.reply_text(f"📊 Запитів сьогодні: {limit}")
+
+
+async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    uid = user.id
+    name = user.first_name
+    vips = load_vips()
+    status = "VIP ⭐" if uid in vips or uid == admin_id else "Звичайний користувач"
+
+    today = datetime.now().date().isoformat()
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT COUNT(*) FROM messages
+        WHERE user_id = ? AND DATE(timestamp) = ?
+    """, (uid, today))
+    count_today = cursor.fetchone()[0]
+    conn.close()
+
+    text = (
+        f"👤 Профіль користувача\\n"
+        f"Імʼя: {name}\\n"
+        f"ID: {uid}\\n"
+        f"Статус: {status}\\n"
+        f"Сьогоднішні запити: {count_today}/10"
+    )
+    await update.message.reply_text(text)
 
 # ========== ПОВІДОМЛЕННЯ ==========
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -238,6 +281,9 @@ if __name__ == "__main__":
         app.add_handler(CommandHandler("removevip", removevip))
         app.add_handler(CommandHandler("viplist", viplist))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+        app.add_handler(CommandHandler("limits", limits_command))
+        app.add_handler(CommandHandler("profile", profile_command))
+
 
         print("Bot pratsiuie... (GPT-4 для VIP, GPT-3.5 для інших)")
         app.run_polling()
