@@ -201,12 +201,13 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn.close()
 
     text = (
-        f"👤 Профіль користувача\\n"
-        f"Імʼя: {name}\\n"
-        f"ID: {uid}\\n"
-        f"Статус: {status}\\n"
+        f"👤 Профіль користувача\n"
+        f"Імʼя: {name}\n"
+        f"ID: {uid}\n"
+        f"Статус: {status}\n"
         f"Сьогоднішні запити: {count_today}/10"
-    )
+        )
+    
     await update.message.reply_text(text)
 
 # ========== ПОВІДОМЛЕННЯ ==========
